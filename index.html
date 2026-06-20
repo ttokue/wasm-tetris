@@ -9,7 +9,7 @@
   <body>
     <main class="app">
       <section class="playfield" aria-label="Tetris game">
-        <canvas id="board" width="300" height="600" aria-label="ゲーム盤"></canvas>
+        <canvas id="board" width="300" height="600" aria-label="Game board"></canvas>
         <div id="overlay" class="overlay">
           <strong>WASM TETRIS</strong>
           <span>Tap to start</span>
@@ -29,16 +29,20 @@
           <span>Level</span>
           <strong id="level">1</strong>
         </div>
-        <canvas id="next" width="120" height="120" aria-label="次のブロック"></canvas>
+        <div class="stat">
+          <span>Best</span>
+          <strong id="best">0</strong>
+        </div>
+        <canvas id="next" width="120" height="120" aria-label="Next piece"></canvas>
         <div id="wasmState" class="badge">WASM loading</div>
       </aside>
 
-      <nav class="controls" aria-label="スマホ操作">
-        <button data-action="left" aria-label="左">←</button>
-        <button data-action="rotate" aria-label="回転">↻</button>
-        <button data-action="right" aria-label="右">→</button>
-        <button data-action="down" aria-label="下">↓</button>
-        <button data-action="drop" class="wide" aria-label="一気に落とす">DROP</button>
+      <nav class="controls" aria-label="Touch controls">
+        <button data-action="left" aria-label="Left">&larr;</button>
+        <button data-action="rotate" aria-label="Rotate">&#8635;</button>
+        <button data-action="right" aria-label="Right">&rarr;</button>
+        <button data-action="down" aria-label="Down">&darr;</button>
+        <button data-action="drop" class="wide" aria-label="Hard drop">DROP</button>
       </nav>
     </main>
 
