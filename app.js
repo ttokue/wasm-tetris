@@ -54,9 +54,10 @@ let bag = [];
 let bestScore = Number(localStorage.getItem("wasmTetrisBest") || 0);
 let clearingRows = [];
 let clearStartedAt = 0;
+let clearSparkles = [];
 let touchStart = null;
 
-const CLEAR_DURATION = 360;
+const CLEAR_DURATION = 520;
 
 function encodeU32(n) {
   const out = [];
@@ -318,6 +319,22 @@ function findFullRows() {
   return rows;
 }
 
+function makeClearSparkles(rows) {
+  clearSparkles = [];
+  rows.forEach((row) => {
+    for (let i = 0; i < 24; i += 1) {
+      clearSparkles.push({
+        x: Math.random() * boardCanvas.width,
+        y: row * CELL + 5 + Math.random() * (CELL - 10),
+        vx: (Math.random() - 0.5) * 150,
+        vy: (Math.random() - 0.75) * 120,
+        size: 2 + Math.random() * 4,
+        delay: Math.random() * 140,
+      });
+    }
+  });
+}
+
 function removeRows(rows) {
   const rowSet = new Set(rows);
   const kept = [];
@@ -381,12 +398,54 @@ function drawClearEffect() {
   if (!clearingRows.length) return;
   const elapsed = performance.now() - clearStartedAt;
   const progress = Math.min(1, elapsed / CLEAR_DURATION);
+  const flash = Math.max(0, 1 - Math.abs(progress - 0.22) / 0.22);
+  const fade = 1 - progress;
   clearingRows.forEach((row) => {
-    const sweepWidth = boardCanvas.width * progress;
-    ctx.fillStyle = `rgba(255, 255, 255, ${0.28 + (1 - progress) * 0.34})`;
+    const centerX = boardCanvas.width / 2;
+    const burstWidth = boardCanvas.width * Math.min(1, progress * 1.9);
+    const left = centerX - burstWidth / 2;
+    const gradient = ctx.createLinearGradient(left, 0, left + burstWidth, 0);
+    gradient.addColorStop(0, "rgba(255, 255, 255, 0)");
+    gradient.addColorStop(0.22, `rgba(49, 195, 189, ${0.24 + flash * 0.38})`);
+    gradient.addColorStop(0.5, `rgba(255, 255, 255, ${0.45 + flash * 0.45})`);
+    gradient.addColorStop(0.78, `rgba(255, 209, 102, ${0.24 + flash * 0.38})`);
+    gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+    ctx.fillStyle = `rgba(255, 255, 255, ${0.14 + fade * 0.18})`;
     ctx.fillRect(0, row * CELL, boardCanvas.width, CELL);
-    ctx.fillStyle = "rgba(255, 209, 102, 0.7)";
-    ctx.fillRect(0, row * CELL, sweepWidth, CELL);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(left, row * CELL - 2, burstWidth, CELL + 4);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${fade * 0.8})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, row * CELL + 1);
+    ctx.lineTo(boardCanvas.width, row * CELL + 1);
+    ctx.moveTo(0, (row + 1) * CELL - 1);
+    ctx.lineTo(boardCanvas.width, (row + 1) * CELL - 1);
+    ctx.stroke();
+  });
+  clearSparkles.forEach((sparkle) => {
+    const age = elapsed - sparkle.delay;
+    if (age < 0) return;
+    const t = Math.min(1, age / CLEAR_DURATION);
+    const x = sparkle.x + sparkle.vx * t;
+    const y = sparkle.y + sparkle.vy * t + 70 * t * t;
+    const alpha = (1 - t) * 0.95;
+    const radius = sparkle.size * (1 - t * 0.45);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(x - radius, y);
+    ctx.lineTo(x + radius, y);
+    ctx.moveTo(x, y - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255, 209, 102, 0.9)";
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(1, radius * 0.34), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   });
 }
 
@@ -452,6 +511,7 @@ function update(time = 0) {
     const cleared = clearingRows.length;
     removeRows(clearingRows);
     clearingRows = [];
+    clearSparkles = [];
     lines += cleared;
     score += [0, 100, 300, 500, 800][cleared] * level;
     level = Math.floor(lines / 10) + 1;
@@ -487,6 +547,7 @@ function lockPiece() {
   if (fullRows.length) {
     clearingRows = fullRows;
     clearStartedAt = performance.now();
+    makeClearSparkles(fullRows);
     dropCounter = 0;
   } else {
     spawn();
