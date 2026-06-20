@@ -35,6 +35,7 @@ const overlay = $("overlay");
 const scoreEl = $("score");
 const linesEl = $("lines");
 const levelEl = $("level");
+const bestEl = $("best");
 const wasmState = $("wasmState");
 
 let wasm = null;
@@ -49,6 +50,13 @@ let running = false;
 let gameOver = false;
 let lastTime = 0;
 let dropCounter = 0;
+let bag = [];
+let bestScore = Number(localStorage.getItem("wasmTetrisBest") || 0);
+let clearingRows = [];
+let clearStartedAt = 0;
+let touchStart = null;
+
+const CLEAR_DURATION = 360;
 
 function encodeU32(n) {
   const out = [];
@@ -164,8 +172,17 @@ function clonePiece(piece) {
   return { color: piece.color, cells: piece.cells.slice(), x: 3, y: -1 };
 }
 
+function refillBag() {
+  bag = PIECES.map((_, index) => index);
+  for (let i = bag.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [bag[i], bag[j]] = [bag[j], bag[i]];
+  }
+}
+
 function randomPiece() {
-  return clonePiece(PIECES[Math.floor(Math.random() * PIECES.length)]);
+  if (!bag.length) refillBag();
+  return clonePiece(PIECES[bag.pop()]);
 }
 
 function writeMemory() {
@@ -273,13 +290,12 @@ function softDrop() {
     score += 1;
     updateStats();
   } else {
-    placePiece();
-    sweepLines();
-    spawn();
+    lockPiece();
   }
 }
 
 function hardDrop() {
+  if (clearingRows.length) return;
   while (canPlace(current, current.x, current.y + 1)) {
     current.y += 1;
     score += 2;
@@ -287,10 +303,42 @@ function hardDrop() {
   softDrop();
 }
 
+function findFullRows() {
+  const rows = [];
+  for (let y = 0; y < ROWS; y += 1) {
+    let full = true;
+    for (let x = 0; x < COLS; x += 1) {
+      if (!board[y * COLS + x]) {
+        full = false;
+        break;
+      }
+    }
+    if (full) rows.push(y);
+  }
+  return rows;
+}
+
+function removeRows(rows) {
+  const rowSet = new Set(rows);
+  const kept = [];
+  for (let y = ROWS - 1; y >= 0; y -= 1) {
+    if (!rowSet.has(y)) kept.push(board.slice(y * COLS, y * COLS + COLS));
+  }
+  board.fill(0);
+  for (let y = ROWS - 1, i = 0; y >= 0 && i < kept.length; y -= 1, i += 1) {
+    board.set(kept[i], y * COLS);
+  }
+}
+
 function updateStats() {
   scoreEl.textContent = score.toString();
   linesEl.textContent = lines.toString();
   levelEl.textContent = level.toString();
+  if (score > bestScore) {
+    bestScore = score;
+    localStorage.setItem("wasmTetrisBest", bestScore.toString());
+  }
+  bestEl.textContent = bestScore.toString();
 }
 
 function drawCell(target, x, y, color, size) {
@@ -298,6 +346,48 @@ function drawCell(target, x, y, color, size) {
   target.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
   target.fillStyle = "rgba(255,255,255,0.14)";
   target.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+}
+
+function drawGhostCell(target, x, y, color, size) {
+  target.save();
+  target.globalAlpha = 0.42;
+  target.strokeStyle = COLORS[color];
+  target.lineWidth = 3;
+  target.strokeRect(x * size + 4, y * size + 4, size - 8, size - 8);
+  target.fillStyle = COLORS[color];
+  target.globalAlpha = 0.12;
+  target.fillRect(x * size + 5, y * size + 5, size - 10, size - 10);
+  target.restore();
+}
+
+function ghostY() {
+  let y = current.y;
+  while (canPlace(current, current.x, y + 1)) y += 1;
+  return y;
+}
+
+function drawPiece(piece, yOverride, ghost = false) {
+  piece.cells.forEach((cell, i) => {
+    if (!cell) return;
+    const x = piece.x + (i % 4);
+    const y = yOverride + Math.floor(i / 4);
+    if (y < 0) return;
+    if (ghost) drawGhostCell(ctx, x, y, piece.color, CELL);
+    else drawCell(ctx, x, y, piece.color, CELL);
+  });
+}
+
+function drawClearEffect() {
+  if (!clearingRows.length) return;
+  const elapsed = performance.now() - clearStartedAt;
+  const progress = Math.min(1, elapsed / CLEAR_DURATION);
+  clearingRows.forEach((row) => {
+    const sweepWidth = boardCanvas.width * progress;
+    ctx.fillStyle = `rgba(255, 255, 255, ${0.28 + (1 - progress) * 0.34})`;
+    ctx.fillRect(0, row * CELL, boardCanvas.width, CELL);
+    ctx.fillStyle = "rgba(255, 209, 102, 0.7)";
+    ctx.fillRect(0, row * CELL, sweepWidth, CELL);
+  });
 }
 
 function draw() {
@@ -317,13 +407,11 @@ function draw() {
     }
   }
   if (current) {
-    current.cells.forEach((cell, i) => {
-      if (!cell) return;
-      const x = current.x + (i % 4);
-      const y = current.y + Math.floor(i / 4);
-      if (y >= 0) drawCell(ctx, x, y, current.color, CELL);
-    });
+    const landingY = ghostY();
+    if (landingY !== current.y) drawPiece(current, landingY, true);
+    drawPiece(current, current.y);
   }
+  drawClearEffect();
   drawNext();
 }
 
@@ -340,6 +428,8 @@ function drawNext() {
 
 function reset() {
   board.fill(0);
+  bag = [];
+  clearingRows = [];
   score = 0;
   lines = 0;
   level = 1;
@@ -358,7 +448,17 @@ function start() {
 function update(time = 0) {
   const delta = time - lastTime;
   lastTime = time;
-  if (running) {
+  if (clearingRows.length && time - clearStartedAt >= CLEAR_DURATION) {
+    const cleared = clearingRows.length;
+    removeRows(clearingRows);
+    clearingRows = [];
+    lines += cleared;
+    score += [0, 100, 300, 500, 800][cleared] * level;
+    level = Math.floor(lines / 10) + 1;
+    updateStats();
+    spawn();
+  }
+  if (running && !clearingRows.length) {
     dropCounter += delta;
     const interval = Math.max(110, 820 - (level - 1) * 62);
     if (dropCounter > interval) {
@@ -372,13 +472,25 @@ function update(time = 0) {
 
 function handleAction(action) {
   if (!running) start();
-  if (!running) return;
+  if (!running || clearingRows.length) return;
   if (action === "left") move(-1);
   if (action === "right") move(1);
   if (action === "rotate") rotate();
   if (action === "down") softDrop();
   if (action === "drop") hardDrop();
   draw();
+}
+
+function lockPiece() {
+  placePiece();
+  const fullRows = findFullRows();
+  if (fullRows.length) {
+    clearingRows = fullRows;
+    clearStartedAt = performance.now();
+    dropCounter = 0;
+  } else {
+    spawn();
+  }
 }
 
 document.addEventListener("keydown", (event) => {
@@ -402,8 +514,37 @@ document.querySelectorAll("button[data-action]").forEach((button) => {
   });
 });
 
-overlay.addEventListener("pointerdown", start);
-boardCanvas.addEventListener("pointerdown", start);
+boardCanvas.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  touchStart = { x: event.clientX, y: event.clientY, time: performance.now() };
+  if (!running) start();
+});
+
+boardCanvas.addEventListener("pointerup", (event) => {
+  event.preventDefault();
+  if (!touchStart || !running || clearingRows.length) return;
+  const dx = event.clientX - touchStart.x;
+  const dy = event.clientY - touchStart.y;
+  const elapsed = performance.now() - touchStart.time;
+  touchStart = null;
+
+  if (Math.abs(dx) < 18 && Math.abs(dy) < 18 && elapsed < 320) {
+    rotate();
+  } else if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 28) {
+    const steps = Math.max(1, Math.min(4, Math.round(Math.abs(dx) / 42)));
+    for (let i = 0; i < steps; i += 1) move(dx > 0 ? 1 : -1);
+  } else if (dy > 42) {
+    hardDrop();
+  } else if (dy < -42) {
+    rotate();
+  }
+  draw();
+});
+
+overlay.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  start();
+});
 
 initWasm().then(() => {
   reset();
