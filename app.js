@@ -160,9 +160,9 @@ async function initWasm() {
     const module = await WebAssembly.instantiate(makeWasmBytes());
     wasm = module.instance.exports;
     memory = new Uint8Array(wasm.memory.buffer);
-    wasmState.textContent = "WASM active";
+    wasmState.textContent = "できたよ";
   } catch (error) {
-    wasmState.textContent = "JS fallback";
+    wasmState.textContent = "できたよ";
     wasmState.classList.add("fallback");
     console.warn("WASM unavailable:", error);
   }
@@ -274,8 +274,8 @@ function spawn() {
   if (!canPlace(current)) {
     running = false;
     gameOver = true;
-    overlay.querySelector("strong").textContent = "GAME OVER";
-    overlay.querySelector("span").textContent = "Tap to retry";
+    overlay.querySelector("strong").textContent = "おしまい";
+    overlay.querySelector("span").textContent = "たっぷして もういちど";
     overlay.classList.remove("hidden");
   }
 }
