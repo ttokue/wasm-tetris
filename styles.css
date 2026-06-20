@@ -109,7 +109,7 @@ canvas {
 .panel {
   align-self: stretch;
   display: grid;
-  grid-template-rows: repeat(4, auto) 132px auto 1fr;
+  grid-template-rows: repeat(4, auto) 132px 1fr;
   gap: 10px;
 }
 
@@ -153,6 +153,10 @@ canvas {
   color: var(--danger);
 }
 
+.status-hidden {
+  display: none;
+}
+
 .controls {
   grid-column: 1 / -1;
   display: grid;
@@ -194,7 +198,7 @@ button:active {
   }
 
   .panel {
-    grid-template-rows: repeat(4, auto) 104px auto;
+    grid-template-rows: repeat(4, auto) 104px 1fr;
     gap: 8px;
   }
 
