@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>WASM Tetris</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app">
+      <section class="playfield" aria-label="Tetris game">
+        <canvas id="board" width="300" height="600" aria-label="ゲーム盤"></canvas>
+        <div id="overlay" class="overlay">
+          <strong>WASM TETRIS</strong>
+          <span>Tap to start</span>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <div class="stat">
+          <span>Score</span>
+          <strong id="score">0</strong>
+        </div>
+        <div class="stat">
+          <span>Lines</span>
+          <strong id="lines">0</strong>
+        </div>
+        <div class="stat">
+          <span>Level</span>
+          <strong id="level">1</strong>
+        </div>
+        <canvas id="next" width="120" height="120" aria-label="次のブロック"></canvas>
+        <div id="wasmState" class="badge">WASM loading</div>
+      </aside>
+
+      <nav class="controls" aria-label="スマホ操作">
+        <button data-action="left" aria-label="左">←</button>
+        <button data-action="rotate" aria-label="回転">↻</button>
+        <button data-action="right" aria-label="右">→</button>
+        <button data-action="down" aria-label="下">↓</button>
+        <button data-action="drop" class="wide" aria-label="一気に落とす">DROP</button>
+      </nav>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
