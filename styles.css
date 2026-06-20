@@ -96,6 +96,12 @@ canvas {
   outline-offset: 4px;
 }
 
+.overlay-hint {
+  color: #f3f7fa;
+  font-size: clamp(0.95rem, 3.6vw, 1.15rem);
+  font-weight: 800;
+}
+
 .overlay.hidden {
   display: none;
 }
