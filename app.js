@@ -32,6 +32,7 @@ const nextCanvas = $("next");
 const ctx = boardCanvas.getContext("2d");
 const nextCtx = nextCanvas.getContext("2d");
 const overlay = $("overlay");
+const startButton = $("startButton");
 const scoreEl = $("score");
 const linesEl = $("lines");
 const levelEl = $("level");
@@ -56,8 +57,13 @@ let clearingRows = [];
 let clearStartedAt = 0;
 let clearSparkles = [];
 let touchStart = null;
+let activePointers = new Set();
 
 const CLEAR_DURATION = 520;
+
+function suppressBrowserGesture(event) {
+  event.preventDefault();
+}
 
 function encodeU32(n) {
   const out = [];
@@ -276,7 +282,7 @@ function spawn() {
     running = false;
     gameOver = true;
     overlay.querySelector("strong").textContent = "おしまい";
-    overlay.querySelector("span").textContent = "たっぷして もういちど";
+    startButton.textContent = "ここを おす";
     overlay.classList.remove("hidden");
   }
 }
@@ -494,6 +500,8 @@ function reset() {
   level = 1;
   gameOver = false;
   nextPiece = randomPiece();
+  overlay.querySelector("strong").textContent = "ぶろっくおとし";
+  startButton.textContent = "ここを おす";
   spawn();
   updateStats();
 }
@@ -575,21 +583,68 @@ document.querySelectorAll("button[data-action]").forEach((button) => {
   });
 });
 
+document.addEventListener("touchmove", suppressBrowserGesture, { passive: false });
+document.addEventListener("gesturestart", suppressBrowserGesture, { passive: false });
+document.addEventListener("gesturechange", suppressBrowserGesture, { passive: false });
+document.addEventListener("gestureend", suppressBrowserGesture, { passive: false });
+
 boardCanvas.addEventListener("pointerdown", (event) => {
   event.preventDefault();
-  touchStart = { x: event.clientX, y: event.clientY, time: performance.now() };
+  activePointers.add(event.pointerId);
+  if (activePointers.size > 1) return;
+  boardCanvas.setPointerCapture(event.pointerId);
+  touchStart = {
+    id: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    lastX: event.clientX,
+    lastY: event.clientY,
+    didMove: false,
+    time: performance.now(),
+  };
   if (!running) start();
+});
+
+boardCanvas.addEventListener("pointermove", (event) => {
+  event.preventDefault();
+  if (!touchStart || touchStart.id !== event.pointerId || !running || clearingRows.length) return;
+  const rect = boardCanvas.getBoundingClientRect();
+  const moveStep = Math.max(18, rect.width / COLS * 0.58);
+  const dropStep = Math.max(22, rect.height / ROWS * 0.72);
+  let dx = event.clientX - touchStart.lastX;
+  let dy = event.clientY - touchStart.lastY;
+
+  while (Math.abs(dx) >= moveStep) {
+    const direction = dx > 0 ? 1 : -1;
+    move(direction);
+    touchStart.lastX += direction * moveStep;
+    dx = event.clientX - touchStart.lastX;
+    touchStart.didMove = true;
+  }
+
+  while (dy >= dropStep) {
+    softDrop();
+    touchStart.lastY += dropStep;
+    dy = event.clientY - touchStart.lastY;
+    touchStart.didMove = true;
+  }
+
+  draw();
 });
 
 boardCanvas.addEventListener("pointerup", (event) => {
   event.preventDefault();
-  if (!touchStart || !running || clearingRows.length) return;
+  activePointers.delete(event.pointerId);
+  if (!touchStart || touchStart.id !== event.pointerId || !running || clearingRows.length) return;
   const dx = event.clientX - touchStart.x;
   const dy = event.clientY - touchStart.y;
   const elapsed = performance.now() - touchStart.time;
+  const didMove = touchStart.didMove;
   touchStart = null;
 
-  if (Math.abs(dx) < 18 && Math.abs(dy) < 18 && elapsed < 320) {
+  if (didMove) {
+    if (dy > 96 && elapsed < 280) hardDrop();
+  } else if (Math.abs(dx) < 18 && Math.abs(dy) < 18 && elapsed < 320) {
     rotate();
   } else if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 28) {
     const steps = Math.max(1, Math.min(4, Math.round(Math.abs(dx) / 42)));
@@ -602,7 +657,21 @@ boardCanvas.addEventListener("pointerup", (event) => {
   draw();
 });
 
+boardCanvas.addEventListener("pointercancel", (event) => {
+  activePointers.delete(event.pointerId);
+  if (touchStart && touchStart.id === event.pointerId) touchStart = null;
+});
+
+boardCanvas.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
+  handleAction("drop");
+});
+
 overlay.addEventListener("pointerdown", (event) => {
+  if (event.target === overlay) event.preventDefault();
+});
+
+startButton.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   start();
 });
