@@ -58,11 +58,18 @@ let clearStartedAt = 0;
 let clearSparkles = [];
 let touchStart = null;
 let activePointers = new Set();
+let lastTouchEndedAt = 0;
 
 const CLEAR_DURATION = 520;
 
 function suppressBrowserGesture(event) {
   event.preventDefault();
+}
+
+function suppressDoubleTapZoom(event) {
+  const now = performance.now();
+  if (now - lastTouchEndedAt < 420) event.preventDefault();
+  lastTouchEndedAt = now;
 }
 
 function encodeU32(n) {
@@ -584,6 +591,8 @@ document.querySelectorAll("button[data-action]").forEach((button) => {
 });
 
 document.addEventListener("touchmove", suppressBrowserGesture, { passive: false });
+document.addEventListener("touchend", suppressDoubleTapZoom, { passive: false });
+document.addEventListener("dblclick", suppressBrowserGesture, { passive: false });
 document.addEventListener("gesturestart", suppressBrowserGesture, { passive: false });
 document.addEventListener("gesturechange", suppressBrowserGesture, { passive: false });
 document.addEventListener("gestureend", suppressBrowserGesture, { passive: false });
